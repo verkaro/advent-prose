@@ -21,8 +21,7 @@ type Config struct {
 	MaxLineLength int
 
 	// ParagraphSpacing defines the style of spacing between paragraphs.
-	// Valid values: "none", "single", "blank-line". "none" and "single"
-	// both result in a single newline. "blank-line" results in two newlines.
+	// Valid values: "none", "single", "blank-line".
 	ParagraphSpacing string
 
 	// RespectMaxLineLength, if true, soft-wraps long lines at word boundaries,
@@ -55,61 +54,80 @@ func Ventilate(input string, cfg Config) (string, error) {
 		return "", err
 	}
 
-	lines := strings.Split(input, "\n")
-	var blocks []string
+	// Preserve trailing newline information.
+	hasTrailingNewline := strings.HasSuffix(input, "\n") || strings.HasSuffix(input, "\r\n")
 
-	for i := 0; i < len(lines); {
-		line := lines[i]
-		trimmedLine := strings.TrimSpace(line)
+	lines := strings.Split(strings.ReplaceAll(input, "\r\n", "\n"), "\n")
+	var processedBlocks []string
+	var blockBuffer []string
 
-		if strings.HasPrefix(trimmedLine, "```") {
-			// Consume the entire code block.
-			codeBlockBuilder := strings.Builder{}
-			codeBlockBuilder.WriteString(line)
-			i++
-			for i < len(lines) {
-				line = lines[i]
-				codeBlockBuilder.WriteString("\n" + line)
-				if strings.HasPrefix(strings.TrimSpace(line), "```") {
-					break
-				}
-				i++
-			}
-			blocks = append(blocks, codeBlockBuilder.String())
-			i++
-		} else if isNonProseBlock(trimmedLine) {
-			// Non-prose blocks (headings, lists) are added as is.
-			// Blank lines are skipped and handled by the final join.
-			if trimmedLine != "" {
-				blocks = append(blocks, line)
-			}
-			i++
-		} else {
-			// Consume a paragraph block.
-			paraBuilder := strings.Builder{}
-			paraBuilder.WriteString(line)
-			i++
-			for i < len(lines) {
-				if isNonProseBlock(strings.TrimSpace(lines[i])) {
-					break
-				}
-				paraBuilder.WriteString(" " + lines[i])
-				i++
-			}
-			ventilated, err := ventilateParagraph(paraBuilder.String(), cfg)
+	// processBlock is a helper to process the buffered lines as a single block.
+	processBlock := func() error {
+		if len(blockBuffer) > 0 {
+			processed, err := ventilateBlock(blockBuffer, cfg)
 			if err != nil {
+				return err
+			}
+			processedBlocks = append(processedBlocks, processed)
+			blockBuffer = nil // Reset buffer
+		}
+		return nil
+	}
+
+	for _, line := range lines {
+		if strings.TrimSpace(line) == "" {
+			// A blank line acts as a block separator.
+			if err := processBlock(); err != nil {
 				return "", err
 			}
-			blocks = append(blocks, ventilated)
+		} else {
+			blockBuffer = append(blockBuffer, line)
 		}
 	}
 
-	separator := "\n"
-	if cfg.ParagraphSpacing == "blank-line" {
-		separator = "\n\n"
+	// Process the last block if the file doesn't end with a blank line.
+	if err := processBlock(); err != nil {
+		return "", err
 	}
 
-	return strings.Join(blocks, separator), nil
+	// Join all processed blocks with a standard double newline.
+	output := strings.Join(processedBlocks, "\n\n")
+
+	// Restore trailing newline if it existed in the original input.
+	if hasTrailingNewline && !strings.HasSuffix(output, "\n") {
+		output += "\n"
+	}
+
+
+	return output, nil
+}
+
+// ventilateBlock determines the block type and processes it accordingly.
+func ventilateBlock(blockLines []string, cfg Config) (string, error) {
+	// A block is non-prose if its first line indicates a non-prose type.
+	firstLineTrimmed := strings.TrimSpace(blockLines[0])
+
+	if isNonProseBlock(firstLineTrimmed) || strings.HasPrefix(firstLineTrimmed, "```") {
+		// Non-prose blocks are passed through verbatim, preserving internal newlines.
+		return strings.Join(blockLines, "\n"), nil
+	}
+
+	// Join lines with care, preserving meaningful breaks like those after a colon.
+	var paraBuilder strings.Builder
+	for i, line := range blockLines {
+		paraBuilder.WriteString(line)
+		if i < len(blockLines)-1 {
+			// If a line ends with a colon, preserve the newline.
+			// Otherwise, join with a space to merge wrapped lines.
+			if strings.HasSuffix(strings.TrimSpace(line), ":") {
+				paraBuilder.WriteString("\n")
+			} else {
+				paraBuilder.WriteString(" ")
+			}
+		}
+	}
+
+	return ventilateParagraph(paraBuilder.String(), cfg)
 }
 
 // ventilateParagraph handles the core logic for a single prose paragraph.
@@ -135,7 +153,6 @@ func ventilateBySentence(p string, cfg Config) (string, error) {
 	}
 
 	for i < len(p) {
-		// New: Check for ellipsis and skip it.
 		if strings.HasPrefix(p[i:], "...") {
 			i += 3
 			continue
@@ -213,7 +230,6 @@ func ventilateBySentence(p string, cfg Config) (string, error) {
 	if lastBreak < len(p) {
 		result.WriteString(p[lastBreak:])
 	}
-	// Trim trailing newline from the ventilated paragraph itself.
 	return strings.TrimSuffix(result.String(), "\n"), nil
 }
 
@@ -263,7 +279,7 @@ func checkUnterminatedMarkup(s string) error {
 			if level > 0 {
 				level--
 			} else {
-				return errUnterminatedMarkup // Closing brace without an opening one
+				return errUnterminatedMarkup
 			}
 		}
 	}
@@ -273,12 +289,13 @@ func checkUnterminatedMarkup(s string) error {
 	return nil
 }
 
+// isNonProseBlock determines if a line marks the beginning of a block
+// that should be passed through without ventilation.
 func isNonProseBlock(line string) bool {
-	// An empty string is not a prose block, it's a separator.
 	if line == "" {
-		return true
+		return false
 	}
-	if strings.HasPrefix(line, "#") || strings.HasPrefix(line, ">") || strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") {
+	if strings.HasPrefix(line, "#") || strings.HasPrefix(line, ">") || strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "* ") || strings.HasPrefix(line, "---") {
 		return true
 	}
 	if i := strings.Index(line, ". "); i > 0 {

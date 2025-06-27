@@ -26,4 +26,19 @@ Refer to the [manual](doc.md) for more. Additional info follows.
 
 > This is a blockquote. It contains two sentences. But no line breaks should be inserted.
 
+```
+Here is some code. It prints output.
+print("Hello, world!")
+```
+
+# My Story. A Lasting Relationship.
+
+- Found. A dog.
+- Looked again. It was gone.
+
+---
+
+Now we test abbreviations:
+I went to see Mr. Smith.
+He was home.
 

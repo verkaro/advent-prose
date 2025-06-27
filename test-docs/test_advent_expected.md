@@ -4,7 +4,7 @@ This is a simple paragraph.
 It should be split into separate lines per sentence.
 Let's ensure it works!
 
-I like *strong tea.* 
+I like *strong tea.*
 It helps me write.
 
 He looked up... the stars were already fading.
@@ -53,4 +53,3 @@ Now we test abbreviations:
 I went to see Mr. Smith.
 He was home.
 
-Something went wrong {+unfinished
