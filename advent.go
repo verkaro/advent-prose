@@ -135,6 +135,12 @@ func ventilateBySentence(p string, cfg Config) (string, error) {
 	}
 
 	for i < len(p) {
+		// New: Check for ellipsis and skip it.
+		if strings.HasPrefix(p[i:], "...") {
+			i += 3
+			continue
+		}
+
 		if p[i] == '{' {
 			end, ok := findMarkupEnd(p, i)
 			if !ok {

@@ -155,8 +155,6 @@ func TestVentilate(t *testing.T) {
 			want:  "This is prose.\n\n# This is a heading",
 			err:   nil,
 		},
-
-		// --- New test for configurable abbreviations ---
 		{
 			name: "Abbreviation with custom list",
 			cfg: Config{
@@ -168,6 +166,22 @@ func TestVentilate(t *testing.T) {
 			input: "Item No. 42 is important. The default Mr. Smith is not an abbreviation here.",
 			// Expect "No. 42" to be preserved, but "Mr." to be split.
 			want:  "Item No. 42 is important.\nThe default Mr.\nSmith is not an abbreviation here.",
+			err:   nil,
+		},
+
+		// --- New tests for ellipsis handling ---
+		{
+			name:  "Ellipsis mid-sentence (spec)",
+			cfg:   Config{SentenceBreak: true},
+			input: "He looked up... the stars were already fading. She whispered.",
+			want:  "He looked up... the stars were already fading.\nShe whispered.",
+			err:   nil,
+		},
+		{
+			name:  "Ellipsis mid-sentence (user)",
+			cfg:   Config{SentenceBreak: true},
+			input: "This is a ... hold for it ... test sentence.",
+			want:  "This is a ... hold for it ... test sentence.",
 			err:   nil,
 		},
 	}

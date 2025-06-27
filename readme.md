@@ -1,114 +1,143 @@
-# Advent Prose Ventilator
+# Advent Spec v0.3 — Markdown Prose Ventilator Library
 
-**Advent** is a Go library that performs structural ventilation of Markdown-formatted prose. It is designed to insert meaningful line breaks at natural sentence boundaries without altering the visual rendering of the document, making it ideal for improving the readability and diff-ability of prose in version control systems.
+## Overview
 
-The library is markup-aware but markup-agnostic—it respects and preserves inline markup such as **EditML** and **CriticMarkup**, treating them as atomic spans during processing.
+Advent is a Go library for structurally ventilating Markdown-formatted prose. It inserts line breaks at natural sentence boundaries for improved readability, diff tracking, and editing. It is compatible with inline markup like **EditML** and **CriticMarkup**, and preserves the integrity of Markdown documents.
 
-## Core Philosophy
+While Advent operates on raw Markdown strings, it is designed to align with the [Goldmark](https://github.com/yuin/goldmark) parser model. This ensures that the output remains semantically valid and visually unchanged when rendered through Goldmark or any compliant Markdown renderer.
 
-* **Markdown-first**: Only processes prose blocks valid within Markdown.
-* **Editor-driven**: Does not parse full documents with metadata or hybrid formats.
-* **Markup-preserving**: Honors curly-braced inline markup but does not interpret it.
-* **One-way formatting**: Advent does not provide "unventilation"; standard Markdown tools will reflow the output naturally.
+> **Note:** Advent only processes prose blocks. Structural blocks (headings, lists, code, etc.) are preserved without modification.
 
 ---
 
-## Installation
+## Highlights
 
-```sh
-go get [github.com/verkaro/advent-prose](https://github.com/verkaro/advent-prose)
-```
-
----
-
-## Usage
-
-The primary entrypoint to the library is the `advent.Ventilate` function.
-
-### Basic Ventilation
-
-To split a paragraph into one-sentence-per-line, use a simple `Config`.
-
-```go
-package main
-
-import (
-	"fmt"
-	"log"
-
-	"[github.com/verkaro/advent-prose](https://github.com/verkaro/advent-prose)"
-)
-
-func main() {
-	input := "This is the first sentence. This is the second sentence. And this is the third."
-	cfg := advent.Config{
-		SentenceBreak: true,
-	}
-
-	output, err := advent.Ventilate(input, cfg)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Println(output)
-}
-```
-
-**Output:**
-
-```
-This is the first sentence.
-This is the second sentence.
-And this is the third.
-```
-
-### Advanced Configuration
-
-Advent provides several options to control its behavior.
-
-#### Paragraph Spacing
-
-You can control the spacing between blocks with `ParagraphSpacing`.
-
-```go
-input := "This is paragraph one.\n\nThis is paragraph two."
-cfg := advent.Config{
-    ParagraphSpacing: "blank-line",
-}
-// output will have a blank line between the paragraphs.
-```
-
-#### Custom Abbreviations
-
-You can provide a custom list of abbreviations to prevent incorrect sentence breaks.
-
-```go
-input := "The item is No. 42. It is very important."
-cfg := advent.Config{
-    SentenceBreak: true,
-    Abbreviations: map[string]bool{
-        "No.": true,
-    },
-}
-
-output, _ := advent.Ventilate(input, cfg)
-// output:
-// The item is No. 42.
-// It is very important.
-```
+* ✨ **Markdown-aware:** Understands and preserves Markdown structure
+* 🧠 **Markup-smart:** Protects `{...}` inline markup (EditML, CriticMarkup)
+* 📐 **Configurable:** Supports sentence-aware or line-length-based reflow
+* 🔄 **Idempotent:** Repeated runs will not mangle spacing or breaks
+* 🧪 **Testable:** Ships with a full test suite and golden fixtures
 
 ---
 
-## Configuration
+## Public API
 
-The `advent.Config` struct provides the following options:
+### `type Config`
 
-| Field                  | Type              | Description                                                                                              |
-| ---------------------- | ----------------- | -------------------------------------------------------------------------------------------------------- |
-| `SentenceBreak`        | `bool`            | If `true`, inserts line breaks at the end of sentences.                                                  |
-| `MaxLineLength`        | `int`             | A soft limit for line length when `RespectMaxLineLength` is `true`.                                      |
-| `ParagraphSpacing`     | `string`          | Controls spacing between blocks. Can be `"single"` or `"blank-line"`.                                      |
-| `RespectMaxLineLength` | `bool`            | If `true` and `SentenceBreak` is `false`, wraps lines at word boundaries.                                |
-| `Abbreviations`        | `map[string]bool` | A custom map of abbreviations to ignore. If `nil`, a default English list is used.                       |
+Defines global configuration for sentence detection and formatting.
+
+```go
+type Config struct {
+    SentenceBreak           bool   // Break after sentence-ending punctuation
+    MaxLineLength           int    // Soft max characters per line
+    ParagraphSpacing        string // "none", "single", or "blank-line"
+    RespectMaxLineLength    bool   // Wrap long lines if no sentence break
+}
+```
+
+### `func Ventilate(input string, cfg Config) (string, error)`
+
+Performs sentence-aware reflow on Markdown-formatted prose paragraphs.
+
+### `func IsVentilated(input string) bool`
+
+(Optional) Detects whether input already follows Advent-style ventilation.
+
+---
+
+## Input Requirements
+
+* Valid Markdown prose (paragraphs, emphasis, links, etc.)
+* May include inline `{...}` markup, such as:
+
+  * `{+add+}`, `{-remove-}`, `{=highlight=}`, `{>>comment<<}`
+  * Nested punctuation, movement tags, or combinations
+* Should not contain structural or config-driven syntax (e.g. `.biff`)
+
+---
+
+## Sentence Detection Behavior
+
+* Breaks after `.`, `!`, or `?` followed by space or newline
+* Uses a masked version of the string to ignore punctuation in markup
+* No breaks inserted inside `{...}` spans
+* Sentence-ending punctuation inside quotes or emphasis is respected
+* Allowlist of abbreviations prevents false sentence breaks
+
+---
+
+## Markdown-Aware Formatting
+
+Advent respects Markdown syntax rules:
+
+| Structure   | Behavior           |
+| ----------- | ------------------ |
+| Paragraphs  | Ventilated         |
+| Headings    | Passed unchanged   |
+| Lists       | Passed unchanged   |
+| Blockquotes | Passed unchanged   |
+| Code blocks | Preserved verbatim |
+
+---
+
+## Configuration Behavior
+
+* If `SentenceBreak: true`, never break mid-sentence—even if too long
+* If `RespectMaxLineLength: true`, wrap at word boundaries (unless SentenceBreak is on)
+* Paragraph spacing can be:
+
+  * `"none"` — flush paragraph joins
+  * `"single"` — single newline
+  * `"blank-line"` — extra blank line
+
+---
+
+## Error Conditions
+
+| Situation                        | Error? |
+| -------------------------------- | ------ |
+| Malformed `{+add`                | ✅      |
+| Empty string input               | ❌      |
+| Invalid nested braces `{=x{y}=}` | ✅      |
+
+---
+
+## Newline Normalization
+
+* Trims leading/trailing whitespace
+* Collapses multiple blank lines to one
+* Ensures output is consistent with configuration
+
+---
+
+## Testing & Verification
+
+* ✅ Golden tests for all edge cases
+* ✅ Table-driven tests for configuration variations
+* ✅ Idempotency checks
+* ✅ Malformed markup triggers error conditions
+* ✅ Markdown output is human-readable and stable for version control
+
+> See `test_advent_expected.md` for examples.
+
+---
+
+## Origin
+
+Advent was developed collaboratively:
+
+* Specification authored and iterated with **ChatGPT**
+* Initial implementation by **Gemini**
+
+Together, they rapidly refined the tool into an extensible, testable, and Markdown-compliant prose processor.
+
+---
+
+## License
+
+MIT. See `LICENSE` file.
+
+---
+
 
 

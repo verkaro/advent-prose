@@ -13,18 +13,43 @@ import (
 
 func main() {
 	// Define flags to control the ventilation configuration.
+	inputFile := flag.String("i", "", "Input file path. If not specified, reads from stdin.")
 	sentenceBreak := flag.Bool("sentence-break", true, "Break lines at the end of sentences.")
 	maxLineLength := flag.Int("max-line-length", 0, "Soft limit for line length (only used if sentence-break is false).")
 	pSpacing := flag.String("paragraph-spacing", "single", "Paragraph spacing ('single' or 'blank-line').")
 	respectMaxLine := flag.Bool("respect-max-line-length", false, "Respect max line length for soft wrapping.")
 	abbrevs := flag.String("abbreviations", "", "Comma-separated list of custom abbreviations (e.g., \"No.,Fig.\").")
 
+	// Custom usage message to provide more context and examples.
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Advent Prose Ventilator: A tool to reflow Markdown prose.\n\n")
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Processes Markdown from standard input or an input file and prints to standard output.\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		flag.PrintDefaults()
+		fmt.Fprintf(os.Stderr, "\nExamples:\n")
+		fmt.Fprintf(os.Stderr, "  # Process from stdin\n")
+		fmt.Fprintf(os.Stderr, "  cat my_document.md | %s\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "  # Process from a file\n")
+		fmt.Fprintf(os.Stderr, "  %s -i my_document.md\n", os.Args[0])
+	}
+
 	flag.Parse()
 
-	// Read all input from standard input.
-	input, err := io.ReadAll(os.Stdin)
-	if err != nil {
-		log.Fatalf("Error reading from stdin: %v", err)
+	var inputBytes []byte
+	var err error
+
+	// Read from the specified input file or fall back to stdin.
+	if *inputFile != "" {
+		inputBytes, err = os.ReadFile(*inputFile)
+		if err != nil {
+			log.Fatalf("Error reading from file %q: %v", *inputFile, err)
+		}
+	} else {
+		inputBytes, err = io.ReadAll(os.Stdin)
+		if err != nil {
+			log.Fatalf("Error reading from stdin: %v", err)
+		}
 	}
 
 	// Build the configuration from the flags.
@@ -48,7 +73,7 @@ func main() {
 	}
 
 	// Ventilate the input using the library.
-	output, err := advent.Ventilate(string(input), cfg)
+	output, err := advent.Ventilate(string(inputBytes), cfg)
 	if err != nil {
 		log.Fatalf("Error ventilating text: %v", err)
 	}
