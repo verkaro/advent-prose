@@ -1,7 +1,7 @@
 // Package advent provides tools for structural ventilation of Markdown-formatted prose.
 // It inserts line breaks at natural sentence boundaries to improve readability and
 // version control diffs without altering the final rendered output.
-package advent
+package advent-prose
 
 import (
 	"errors"

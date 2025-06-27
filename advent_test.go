@@ -1,4 +1,4 @@
-package advent
+package advent-prose
 
 import (
 	"errors"
